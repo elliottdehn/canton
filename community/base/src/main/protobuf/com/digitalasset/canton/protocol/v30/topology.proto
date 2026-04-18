@@ -59,6 +59,7 @@ message Enums {
     TOPOLOGY_MAPPING_CODE_PARTY_TO_KEY_MAPPING = 18;
     TOPOLOGY_MAPPING_CODE_LSU_ANNOUNCEMENT = 19;
     TOPOLOGY_MAPPING_CODE_SEQUENCER_CONNECTION_SUCCESSOR = 20;
+    TOPOLOGY_MAPPING_CODE_TEMPLATE_BOUND_PARTY = 21;
   }
 
   enum ParticipantFeatureFlag {
@@ -399,6 +400,38 @@ message LsuSequencerConnectionSuccessor {
 }
 
 // [docs-entry-start: topology mapping]
+// A template-bound party constrained to act only through whitelisted templates.
+// Two modes:
+//   - Trustless (key destroyed): auto-confirmation only, no human authority.
+//   - Regulated (key retained): operator can sign/freeze, but can't drain.
+//
+// UNIQUE(party)
+message TemplateBoundParty {
+  // the party whose actions are template-constrained
+  string party = 1;
+
+  // participants hosting this party (each performs auto-confirmation independently).
+  // multiple participants provide liveness redundancy — if one goes down, others
+  // can still serve transactions. any single hosting participant can auto-confirm.
+  repeated string hosting_participant_uids = 2;
+
+  // fully qualified Daml template IDs that this party is allowed to act on.
+  // any transaction where this party is signatory/controller on a choice
+  // outside this set will be rejected.
+  repeated string allowed_template_ids = 3;
+
+  // hash of the signing public key, proving a valid keypair existed at
+  // registration time.
+  bytes signing_key_hash = 4;
+
+  // if true, the signing key may be destroyed after registration (trustless mode).
+  // if false, key destruction is permanently forbidden (regulated mode).
+  // immutable after creation — cannot be changed from false to true.
+  // this prevents an attacker who compromises a regulated pool from
+  // transitioning it to trustless mode by destroying the key.
+  bool key_destruction_allowed = 5;
+}
+
 message TopologyMapping {
   oneof mapping {
     NamespaceDelegation namespace_delegation = 1;
@@ -423,6 +456,8 @@ message TopologyMapping {
 
     LsuAnnouncement synchronizer_upgrade_announcement = 17;
     LsuSequencerConnectionSuccessor sequencer_connection_successor = 18;
+
+    TemplateBoundParty template_bound_party = 19;
   }
   reserved 2; // was identifier_delegation
   reserved 10; // was authority_of
