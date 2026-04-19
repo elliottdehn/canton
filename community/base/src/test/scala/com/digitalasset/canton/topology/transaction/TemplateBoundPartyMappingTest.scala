@@ -120,6 +120,7 @@ class TemplateBoundPartyMappingTest extends AnyWordSpec with Matchers {
         allowedTemplateIds = Seq.empty,
         signingKeyHash = keyHash,
         keyDestructionAllowed = true,
+        rootKeyHash = com.google.protobuf.ByteString.EMPTY,
       )
       val result = TemplateBoundPartyMapping.fromProtoV30(proto)
       result.isRight shouldBe true
@@ -133,6 +134,7 @@ class TemplateBoundPartyMappingTest extends AnyWordSpec with Matchers {
         allowedTemplateIds = Seq("com.example:Token:1.0", "com.example:Token:1.0"),
         signingKeyHash = keyHash,
         keyDestructionAllowed = true,
+        rootKeyHash = com.google.protobuf.ByteString.EMPTY,
       )
       val result = TemplateBoundPartyMapping.fromProtoV30(proto)
       result.isRight shouldBe true

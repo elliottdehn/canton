@@ -2474,6 +2474,7 @@ final case class TemplateBoundPartyMapping(
     allowedTemplateIds: Set[String],
     signingKeyHash: ByteString,
     keyDestructionAllowed: Boolean = true,
+    rootKeyHash: ByteString = ByteString.EMPTY,
 ) extends TopologyMapping {
 
   override def companion: TemplateBoundPartyMapping.type = TemplateBoundPartyMapping
@@ -2498,7 +2499,11 @@ final case class TemplateBoundPartyMapping(
       allowedTemplateIds = allowedTemplateIds.toSeq,
       signingKeyHash = signingKeyHash,
       keyDestructionAllowed = keyDestructionAllowed,
+      rootKeyHash = rootKeyHash,
     )
+
+  /** Whether this TBP supports key rotation (has a root key). */
+  def supportsKeyRotation: Boolean = !rootKeyHash.isEmpty
 
   override def toProtoV30: v30.TopologyMapping =
     v30.TopologyMapping(
@@ -2535,5 +2540,6 @@ object TemplateBoundPartyMapping extends TopologyMappingCompanion {
       allowedTemplateIds = proto.allowedTemplateIds.toSet,
       signingKeyHash = proto.signingKeyHash,
       keyDestructionAllowed = proto.keyDestructionAllowed,
+      rootKeyHash = proto.rootKeyHash,
     )
 }

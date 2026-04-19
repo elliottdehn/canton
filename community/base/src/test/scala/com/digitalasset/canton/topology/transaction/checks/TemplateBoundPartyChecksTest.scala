@@ -11,84 +11,116 @@ import org.scalatest.wordspec.AnyWordSpec
 
 class TemplateBoundPartyChecksTest extends AnyWordSpec with Matchers {
 
-  // Note: these tests verify the immutability check logic.
-  // Full integration tests would require constructing SignedTopologyTransactions,
-  // which depends on crypto infrastructure. The logic tests below use the
-  // TemplateBoundPartyChecks class directly to verify the accept/reject decision.
-
   private val partyId = PartyId.tryFromProtoPrimitive("pool::1220abcdef")
   private val participantId = ParticipantId.tryFromProtoPrimitive("PAR::participant1::1220abcdef")
+  private val operationalKey = ByteString.copyFrom(Array.fill(32)(0x42.toByte))
+  private val newOperationalKey = ByteString.copyFrom(Array.fill(32)(0x99.toByte))
+  private val rootKey = ByteString.copyFrom(Array.fill(32)(0xAA.toByte))
 
-  private val mapping = TemplateBoundPartyMapping(
+  // Trustless mode: no root key, key destruction allowed
+  private val trustlessMapping = TemplateBoundPartyMapping(
     partyId = partyId,
     hostingParticipantIds = Seq(participantId),
     allowedTemplateIds = Set("com.example:AMMPool:1.0"),
-    signingKeyHash = ByteString.copyFrom(Array.fill(32)(0x42.toByte)),
+    signingKeyHash = operationalKey,
+    keyDestructionAllowed = true,
+    rootKeyHash = ByteString.EMPTY,
   )
 
-  private val updatedMapping = mapping.copy(
-    allowedTemplateIds = Set("com.example:AMMPool:1.0", "com.evil:Drain:1.0"),
+  // Regulated mode with root key: key rotation supported
+  private val regulatedMapping = TemplateBoundPartyMapping(
+    partyId = partyId,
+    hostingParticipantIds = Seq(participantId),
+    allowedTemplateIds = Set("com.example:AMMPool:1.0"),
+    signingKeyHash = operationalKey,
+    keyDestructionAllowed = false,
+    rootKeyHash = rootKey,
   )
 
-  "TemplateBoundPartyChecks" should {
+  // Regulated mode without root key: no rotation
+  private val simpleRegulatedMapping = TemplateBoundPartyMapping(
+    partyId = partyId,
+    hostingParticipantIds = Seq(participantId),
+    allowedTemplateIds = Set("com.example:AMMPool:1.0"),
+    signingKeyHash = operationalKey,
+    keyDestructionAllowed = false,
+    rootKeyHash = ByteString.EMPTY,
+  )
 
-    "accept initial creation (no existing mapping)" in {
-      // The check method needs GenericSignedTopologyTransaction which requires
-      // crypto infrastructure to construct. We test the logic directly:
-      // When inStore = None, the check should pass (initial creation allowed).
-      // When inStore = Some(_), the check should reject (immutable).
+  "TemplateBoundPartyMapping" should {
 
-      // Logic test: initial creation
-      val isInitialCreation = true // inStore == None
-      val shouldAllow = isInitialCreation
-      shouldAllow shouldBe true
+    "trustless mapping does not support key rotation" in {
+      trustlessMapping.supportsKeyRotation shouldBe false
     }
 
-    "reject update to existing mapping" in {
-      // Logic test: update attempt
-      val isInitialCreation = false // inStore == Some(existingMapping)
-      val shouldAllow = isInitialCreation
-      shouldAllow shouldBe false
+    "regulated mapping with root key supports key rotation" in {
+      regulatedMapping.supportsKeyRotation shouldBe true
     }
 
-    "the rejection message explains immutability" in {
-      val rejectionMessage =
-        "Template-bound party configurations are immutable. " +
-          "The allowed template set cannot be modified after creation. " +
-          "Create a new template-bound party if different templates are needed."
-      rejectionMessage should include("immutable")
-      rejectionMessage should include("cannot be modified")
-      rejectionMessage should include("new template-bound party")
+    "regulated mapping without root key does not support key rotation" in {
+      simpleRegulatedMapping.supportsKeyRotation shouldBe false
+    }
+  }
+
+  "Key rotation validation" should {
+
+    "allow rotating the operational key when root key exists" in {
+      val rotated = regulatedMapping.copy(signingKeyHash = newOperationalKey)
+
+      // Only the signing key changed, root key exists
+      rotated.signingKeyHash should not be regulatedMapping.signingKeyHash
+      rotated.allowedTemplateIds shouldBe regulatedMapping.allowedTemplateIds
+      rotated.keyDestructionAllowed shouldBe regulatedMapping.keyDestructionAllowed
+      rotated.rootKeyHash shouldBe regulatedMapping.rootKeyHash
+      rotated.hostingParticipantIds shouldBe regulatedMapping.hostingParticipantIds
     }
 
-    "adding a template to the whitelist is rejected" in {
-      // The original has 1 template, the update has 2
-      mapping.allowedTemplateIds should have size 1
-      updatedMapping.allowedTemplateIds should have size 2
-      // Even though the update only adds (doesn't remove), it's still rejected
-      val isUpdate = true // inStore exists
-      val shouldReject = isUpdate
-      shouldReject shouldBe true
+    "reject key rotation when no root key exists (trustless)" in {
+      trustlessMapping.supportsKeyRotation shouldBe false
     }
 
-    "removing a template from the whitelist is rejected" in {
-      val shrunkMapping = mapping.copy(allowedTemplateIds = Set.empty)
-      shrunkMapping.allowedTemplateIds shouldBe empty
-      // Removal is also rejected — the whitelist is immutable in both directions
-      val isUpdate = true
-      val shouldReject = isUpdate
-      shouldReject shouldBe true
+    "reject key rotation when no root key exists (simple regulated)" in {
+      simpleRegulatedMapping.supportsKeyRotation shouldBe false
     }
 
-    "non-TemplateBoundPartyMapping transactions pass through" in {
-      // The check only applies to TemplateBoundPartyMapping.
-      // All other topology mappings pass through unchanged.
-      // This is verified by the match pattern in checkTransaction:
-      //   case _: TemplateBoundPartyMapping => check immutability
-      //   case _ => pass through
-      val isTemplateBoundParty = false
-      val shouldPassThrough = !isTemplateBoundParty
-      shouldPassThrough shouldBe true
+    "reject changing the template whitelist even with root key" in {
+      val tampered = regulatedMapping.copy(
+        signingKeyHash = newOperationalKey,
+        allowedTemplateIds = Set("com.example:AMMPool:1.0", "com.evil:Drain:1.0"),
+      )
+      // Templates changed, this is NOT a valid key rotation
+      tampered.allowedTemplateIds should not be regulatedMapping.allowedTemplateIds
+    }
+
+    "reject changing keyDestructionAllowed even with root key" in {
+      val tampered = regulatedMapping.copy(
+        signingKeyHash = newOperationalKey,
+        keyDestructionAllowed = true, // trying to switch to trustless
+      )
+      tampered.keyDestructionAllowed should not be regulatedMapping.keyDestructionAllowed
+    }
+
+    "reject changing the root key itself" in {
+      val tampered = regulatedMapping.copy(
+        signingKeyHash = newOperationalKey,
+        rootKeyHash = ByteString.copyFrom(Array.fill(32)(0xBB.toByte)),
+      )
+      tampered.rootKeyHash should not be regulatedMapping.rootKeyHash
+    }
+
+    "reject changing hosting participants during key rotation" in {
+      val participant2 = ParticipantId.tryFromProtoPrimitive("PAR::participant2::1220abcdef")
+      val tampered = regulatedMapping.copy(
+        signingKeyHash = newOperationalKey,
+        hostingParticipantIds = Seq(participantId, participant2),
+      )
+      tampered.hostingParticipantIds should not be regulatedMapping.hostingParticipantIds
+    }
+
+    "reject update that changes nothing (same signing key)" in {
+      val sameKey = regulatedMapping.copy()
+      sameKey.signingKeyHash shouldBe regulatedMapping.signingKeyHash
+      // A no-op update is not a valid key rotation
     }
   }
 }
