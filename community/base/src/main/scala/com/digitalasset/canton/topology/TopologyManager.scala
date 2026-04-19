@@ -233,6 +233,7 @@ class AuthorizedTopologyManager(
     timeouts: ProcessingTimeout,
     futureSupervisor: FutureSupervisor,
     loggerFactory: NamedLoggerFactory,
+    makeChecks: TopologyStateLookup => TopologyMappingChecks = _ => NoopTopologyMappingChecks,
 )(implicit ec: ExecutionContext)
     extends LocalTopologyManager(
       nodeId,
@@ -245,6 +246,7 @@ class AuthorizedTopologyManager(
       timeouts,
       futureSupervisor,
       loggerFactory,
+      makeChecks,
     ) {
   def initialize(implicit @unused traceContext: TraceContext): FutureUnlessShutdown[Unit] =
     FutureUnlessShutdown.unit
@@ -263,6 +265,7 @@ abstract class LocalTopologyManager[StoreId <: TopologyStoreId](
     timeouts: ProcessingTimeout,
     futureSupervisor: FutureSupervisor,
     loggerFactory: NamedLoggerFactory,
+    makeChecks: TopologyStateLookup => TopologyMappingChecks = _ => NoopTopologyMappingChecks,
 )(implicit ec: ExecutionContext)
     extends TopologyManager[StoreId, Crypto](
       nodeId,
@@ -281,7 +284,7 @@ abstract class LocalTopologyManager[StoreId <: TopologyStoreId](
       topologyCacheAggregatorConfig,
       topologyConfig,
       None,
-      _ => NoopTopologyMappingChecks,
+      makeChecks,
       crypto.pureCrypto,
       futureSupervisor,
       timeouts,

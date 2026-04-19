@@ -13,6 +13,7 @@ import com.digitalasset.canton.topology.store.TopologyStoreId
 import com.digitalasset.canton.topology.store.memory.InMemoryTopologyStore
 import com.digitalasset.canton.topology.transaction.*
 import com.digitalasset.canton.topology.transaction.DelegationRestriction.CanSignAllMappings
+import com.digitalasset.canton.topology.transaction.checks.TemplateBoundPartyChecks
 import com.digitalasset.canton.{BaseTest, FailOnShutdown, HasExecutionContext}
 import com.digitalasset.canton.config.RequireTypes.PositiveInt
 import com.digitalasset.canton.topology.client.StoreBasedTopologySnapshot
@@ -60,6 +61,7 @@ class TemplateBoundPartyRegistrationTest
       timeouts,
       futureSupervisor,
       loggerFactory.append("manager", "test"),
+      makeChecks = _ => new TemplateBoundPartyChecks(),
     )
 
     (signingKey, namespace, localParticipant, store, manager)
@@ -407,6 +409,189 @@ class TemplateBoundPartyRegistrationTest
 
         // The key survived the failed destruction attempt — it can still sign
         proofResult.isRight shouldBe true
+      }
+    }
+
+    "key rotation: update signing key when root key exists" in {
+      val (signingKey, namespace, localParticipant, store, manager) = mkEnv()
+      val partyId = PartyId(UniqueIdentifier.tryCreate("tbp-rotate", namespace))
+
+      // Generate a second key for rotation
+      val newSigningKey = crypto.generateSymbolicSigningKey(usage = SigningKeyUsage.NamespaceOnly)
+
+      // Root cert for new key's namespace (same namespace since both generated from same crypto)
+      val registration = new TemplateBoundPartyRegistration(
+        localParticipantId = localParticipant,
+        topologyManager = manager,
+        privateStore = crypto.cryptoPrivateStore,
+        hashOps = crypto.pureCrypto,
+        protocolVersion = testedProtocolVersion,
+        permissionlessTbpHosting = true,
+        loggerFactory = loggerFactory,
+      )
+
+      val rootKeyHash = crypto.pureCrypto
+        .digest(
+          com.digitalasset.canton.crypto.HashPurpose.TopologyTransactionSignature,
+          com.google.protobuf.ByteString.copyFrom(signingKey.fingerprint.unwrap.getBytes),
+        )
+        .getCryptographicEvidence
+
+      val operationalKeyHash = crypto.pureCrypto
+        .digest(
+          com.digitalasset.canton.crypto.HashPurpose.TopologyTransactionSignature,
+          com.google.protobuf.ByteString.copyFrom(signingKey.fingerprint.unwrap.getBytes),
+        )
+        .getCryptographicEvidence
+
+      val newOperationalKeyHash = crypto.pureCrypto
+        .digest(
+          com.digitalasset.canton.crypto.HashPurpose.TopologyTransactionSignature,
+          com.google.protobuf.ByteString.copyFrom(newSigningKey.fingerprint.unwrap.getBytes),
+        )
+        .getCryptographicEvidence
+
+      for {
+        _ <- addRootCert(manager, signingKey)
+
+        // Also add root cert for new key namespace
+        _ <- manager
+          .proposeAndAuthorize(
+            TopologyChangeOp.Replace,
+            NamespaceDelegation.tryCreate(
+              Namespace(newSigningKey.id),
+              newSigningKey,
+              DelegationRestriction.CanSignAllMappings,
+            ),
+            Some(PositiveInt.one),
+            Seq(newSigningKey.fingerprint),
+            testedProtocolVersion,
+            expectFullAuthorization = false,
+            waitToBecomeEffective = None,
+          )
+          .valueOrFail("new key root cert")
+
+        _ <- registration.allocate(partyId, signingKey.fingerprint).valueOrFail("allocate")
+
+        // Create TBP with root key (regulated mode with rotation support)
+        originalMapping = TemplateBoundPartyMapping(
+          partyId = partyId,
+          hostingParticipantIds = Seq(localParticipant),
+          allowedTemplateIds = Set("com.example:Pool:1.0"),
+          signingKeyHash = operationalKeyHash,
+          keyDestructionAllowed = false,
+          rootKeyHash = rootKeyHash,
+        )
+        _ <- manager
+          .proposeAndAuthorize(
+            TopologyChangeOp.Replace,
+            originalMapping,
+            Some(PositiveInt.one),
+            Seq(signingKey.fingerprint),
+            testedProtocolVersion,
+            expectFullAuthorization = true,
+            waitToBecomeEffective = None,
+          )
+          .valueOrFail("create TBP with root key")
+
+        // Rotate: update signing key hash, keep everything else the same
+        rotatedMapping = originalMapping.copy(signingKeyHash = newOperationalKeyHash)
+        rotateResult <- manager
+          .proposeAndAuthorize(
+            TopologyChangeOp.Replace,
+            rotatedMapping,
+            None,
+            Seq(signingKey.fingerprint), // signed by root key
+            testedProtocolVersion,
+            expectFullAuthorization = true,
+            waitToBecomeEffective = None,
+          )
+          .value
+
+        // Verify the rotated mapping is in the store
+        snapshot = mkSnapshot(store)
+        config <- snapshot.templateBoundPartyConfig(partyId.toLf)
+
+      } yield {
+        // Key rotation should succeed
+        rotateResult.isRight shouldBe true
+
+        config match {
+          case Some(mapping) =>
+            mapping.signingKeyHash shouldBe newOperationalKeyHash
+            mapping.rootKeyHash shouldBe rootKeyHash
+            mapping.allowedTemplateIds shouldBe Set("com.example:Pool:1.0")
+          case None =>
+            fail("Expected mapping in topology store")
+        }
+      }
+    }
+
+    "key rotation: reject template change disguised as key rotation" in {
+      val (signingKey, namespace, localParticipant, store, manager) = mkEnv()
+      val partyId = PartyId(UniqueIdentifier.tryCreate("tbp-no-tamper", namespace))
+
+      val registration = new TemplateBoundPartyRegistration(
+        localParticipantId = localParticipant,
+        topologyManager = manager,
+        privateStore = crypto.cryptoPrivateStore,
+        hashOps = crypto.pureCrypto,
+        protocolVersion = testedProtocolVersion,
+        permissionlessTbpHosting = true,
+        loggerFactory = loggerFactory,
+      )
+
+      val rootKeyHash = crypto.pureCrypto
+        .digest(
+          com.digitalasset.canton.crypto.HashPurpose.TopologyTransactionSignature,
+          com.google.protobuf.ByteString.copyFrom(signingKey.fingerprint.unwrap.getBytes),
+        )
+        .getCryptographicEvidence
+
+      for {
+        _ <- addRootCert(manager, signingKey)
+        _ <- registration.allocate(partyId, signingKey.fingerprint).valueOrFail("allocate")
+
+        originalMapping = TemplateBoundPartyMapping(
+          partyId = partyId,
+          hostingParticipantIds = Seq(localParticipant),
+          allowedTemplateIds = Set("com.example:Pool:1.0"),
+          signingKeyHash = rootKeyHash,
+          keyDestructionAllowed = false,
+          rootKeyHash = rootKeyHash,
+        )
+        _ <- manager
+          .proposeAndAuthorize(
+            TopologyChangeOp.Replace,
+            originalMapping,
+            Some(PositiveInt.one),
+            Seq(signingKey.fingerprint),
+            testedProtocolVersion,
+            expectFullAuthorization = true,
+            waitToBecomeEffective = None,
+          )
+          .valueOrFail("create TBP")
+
+        // Try to change templates while also rotating key — should be rejected
+        tamperedMapping = originalMapping.copy(
+          signingKeyHash = com.google.protobuf.ByteString.copyFrom(Array.fill(32)(0xFF.toByte)),
+          allowedTemplateIds = Set("com.example:Pool:1.0", "com.evil:Drain:1.0"),
+        )
+        tamperResult <- manager
+          .proposeAndAuthorize(
+            TopologyChangeOp.Replace,
+            tamperedMapping,
+            None,
+            Seq(signingKey.fingerprint),
+            testedProtocolVersion,
+            expectFullAuthorization = true,
+            waitToBecomeEffective = None,
+          )
+          .value
+
+      } yield {
+        // Should be rejected — template change is not a valid key rotation
+        tamperResult.isLeft shouldBe true
       }
     }
   }
