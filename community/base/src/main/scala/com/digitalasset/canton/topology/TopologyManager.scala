@@ -67,6 +67,7 @@ import com.digitalasset.canton.topology.transaction.checks.{
   NoopTopologyMappingChecks,
   OptionalTopologyMappingChecks,
   RequiredTopologyMappingChecks,
+  TemplateBoundPartyChecks,
   TopologyMappingChecks,
 }
 import com.digitalasset.canton.tracing.TraceContext
@@ -125,12 +126,15 @@ class SynchronizerTopologyManager(
       val required =
         RequiredTopologyMappingChecks(Some(staticSynchronizerParameters), lookup, loggerFactory)
 
+      val templateBoundChecks = new TemplateBoundPartyChecks()
+
       if (!disableOptionalTopologyChecks)
         new TopologyMappingChecks.All(
           required,
           new OptionalTopologyMappingChecks(store, loggerFactory),
+          templateBoundChecks,
         )
-      else required
+      else new TopologyMappingChecks.All(required, templateBoundChecks)
     }
     TopologyStateProcessor.forTopologyManager(
       store,
@@ -229,6 +233,7 @@ class AuthorizedTopologyManager(
     timeouts: ProcessingTimeout,
     futureSupervisor: FutureSupervisor,
     loggerFactory: NamedLoggerFactory,
+    makeChecks: TopologyStateLookup => TopologyMappingChecks = _ => NoopTopologyMappingChecks,
 )(implicit ec: ExecutionContext)
     extends LocalTopologyManager(
       nodeId,
@@ -241,6 +246,7 @@ class AuthorizedTopologyManager(
       timeouts,
       futureSupervisor,
       loggerFactory,
+      makeChecks,
     ) {
   def initialize(implicit @unused traceContext: TraceContext): FutureUnlessShutdown[Unit] =
     FutureUnlessShutdown.unit
@@ -259,6 +265,7 @@ abstract class LocalTopologyManager[StoreId <: TopologyStoreId](
     timeouts: ProcessingTimeout,
     futureSupervisor: FutureSupervisor,
     loggerFactory: NamedLoggerFactory,
+    makeChecks: TopologyStateLookup => TopologyMappingChecks = _ => NoopTopologyMappingChecks,
 )(implicit ec: ExecutionContext)
     extends TopologyManager[StoreId, Crypto](
       nodeId,
@@ -277,7 +284,7 @@ abstract class LocalTopologyManager[StoreId <: TopologyStoreId](
       topologyCacheAggregatorConfig,
       topologyConfig,
       None,
-      _ => NoopTopologyMappingChecks,
+      makeChecks,
       crypto.pureCrypto,
       futureSupervisor,
       timeouts,

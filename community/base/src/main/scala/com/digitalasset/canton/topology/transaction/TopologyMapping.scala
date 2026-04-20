@@ -199,6 +199,9 @@ object TopologyMapping {
     case object LsuSequencerConnectionSuccessor
         extends Code("scs", v30Code.TOPOLOGY_MAPPING_CODE_SEQUENCER_CONNECTION_SUCCESSOR)
 
+    case object TemplateBoundParty
+        extends Code("tbp", v30Code.TOPOLOGY_MAPPING_CODE_TEMPLATE_BOUND_PARTY)
+
     val all: Seq[Code] = Seq(
       NamespaceDelegation,
       DecentralizedNamespaceDefinition,
@@ -215,6 +218,7 @@ object TopologyMapping {
       PartyToKeyMapping,
       LsuAnnouncement,
       LsuSequencerConnectionSuccessor,
+      TemplateBoundParty,
     )
 
     val lsuMappings: Set[Code] =
@@ -401,6 +405,8 @@ object TopologyMapping {
         LsuAnnouncement.fromProtoV30(value)
       case Mapping.SequencerConnectionSuccessor(value) =>
         LsuSequencerConnectionSuccessor.fromProtoV30(value)
+      case Mapping.TemplateBoundParty(value) =>
+        TemplateBoundPartyMapping.fromProtoV30(value)
     }
 
   /** Determines the appropriate level for the given topology mappings.
@@ -2454,5 +2460,78 @@ object LsuSequencerConnectionSuccessor extends TopologyMappingCompanion {
       sequencerId,
       successorPsid,
       connection,
+    )
+}
+
+/** A template-bound party whose signing key is destroyed after registration.
+  * Can only act through the whitelisted templates via auto-confirmation.
+  *
+  * See CIP-draft-template-bound-parties.
+  */
+final case class TemplateBoundPartyMapping(
+    partyId: PartyId,
+    allowedTemplateIds: Set[String],
+    signingKeyHash: ByteString,
+    keyDestructionAllowed: Boolean = true,
+    rootKeyHash: ByteString = ByteString.EMPTY,
+) extends TopologyMapping {
+
+  override def companion: TemplateBoundPartyMapping.type = TemplateBoundPartyMapping
+
+  override def namespace: Namespace = partyId.namespace
+  override def maybeUid: Option[UniqueIdentifier] = Some(partyId.uid)
+  override def restrictedToSynchronizer: Option[SynchronizerId] = None
+  override def referencedUids: Set[UniqueIdentifier] = Set(partyId.uid)
+
+  override lazy val uniqueKey: MappingHash =
+    TemplateBoundPartyMapping.uniqueKey(partyId)
+
+  override def requiredAuth(
+      previous: Option[TopologyTransaction[TopologyChangeOp, TopologyMapping]]
+  ): RequiredAuth = RequiredNamespaces(Set(namespace))
+
+  def toProto: v30.TemplateBoundParty =
+    v30.TemplateBoundParty(
+      party = partyId.toProtoPrimitive,
+      allowedTemplateIds = allowedTemplateIds.toSeq,
+      signingKeyHash = signingKeyHash,
+      keyDestructionAllowed = keyDestructionAllowed,
+      rootKeyHash = rootKeyHash,
+    )
+
+  /** Whether this TBP supports key rotation (has a root key). */
+  def supportsKeyRotation: Boolean = !rootKeyHash.isEmpty
+
+  override def toProtoV30: v30.TopologyMapping =
+    v30.TopologyMapping(
+      mapping = v30.TopologyMapping.Mapping.TemplateBoundParty(toProto)
+    )
+
+  override protected def pretty: Pretty[TemplateBoundPartyMapping] = prettyOfClass(
+    param("partyId", _.partyId),
+    param("allowedTemplateIds", _.allowedTemplateIds.size),
+  )
+
+  def isTemplateAllowed(templateId: String): Boolean =
+    allowedTemplateIds.contains(templateId)
+}
+
+object TemplateBoundPartyMapping extends TopologyMappingCompanion {
+  override def code: Code = Code.TemplateBoundParty
+
+  def uniqueKey(partyId: PartyId): MappingHash =
+    TopologyMapping.buildUniqueKey(code)(_.addString(partyId.toProtoPrimitive))
+
+  def fromProtoV30(
+      proto: v30.TemplateBoundParty
+  ): ParsingResult[TemplateBoundPartyMapping] =
+    for {
+      partyId <- PartyId.fromProtoPrimitive(proto.party, "party")
+    } yield TemplateBoundPartyMapping(
+      partyId = partyId,
+      allowedTemplateIds = proto.allowedTemplateIds.toSet,
+      signingKeyHash = proto.signingKeyHash,
+      keyDestructionAllowed = proto.keyDestructionAllowed,
+      rootKeyHash = proto.rootKeyHash,
     )
 }

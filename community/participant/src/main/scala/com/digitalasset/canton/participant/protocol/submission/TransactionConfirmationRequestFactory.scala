@@ -333,6 +333,12 @@ class TransactionConfirmationRequestFactory(
         .leftMap[TransactionConfirmationRequestCreationError](e =>
           RecipientsCreationError(e.message)
         )
+      // NOTE: TBP parties are NOT excluded from the informee set.
+      // The hosting participant needs the encrypted view to execute the Daml
+      // engine and auto-confirm. Canton's encryption is participant-to-participant;
+      // removing the party from informees would remove the hosting participant
+      // from recipients, breaking auto-confirmation and cold standby sync.
+      // Dark pool privacy comes from the OBSERVER list, not informee exclusion.
       viewsToKeyMap <- EncryptedViewMessageFactory
         .generateKeysFromRecipients(
           lightTreesWithMetadata.map {

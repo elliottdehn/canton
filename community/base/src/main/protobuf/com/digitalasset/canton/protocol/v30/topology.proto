@@ -59,6 +59,7 @@ message Enums {
     TOPOLOGY_MAPPING_CODE_PARTY_TO_KEY_MAPPING = 18;
     TOPOLOGY_MAPPING_CODE_LSU_ANNOUNCEMENT = 19;
     TOPOLOGY_MAPPING_CODE_SEQUENCER_CONNECTION_SUCCESSOR = 20;
+    TOPOLOGY_MAPPING_CODE_TEMPLATE_BOUND_PARTY = 21;
   }
 
   enum ParticipantFeatureFlag {
@@ -399,6 +400,35 @@ message LsuSequencerConnectionSuccessor {
 }
 
 // [docs-entry-start: topology mapping]
+// A template-bound party constrained to act only through whitelisted templates.
+// Two modes:
+//   - Trustless (key destroyed): auto-confirmation only, no human authority.
+//   - Regulated (key retained): operator can sign/freeze, but can't drain.
+//
+// UNIQUE(party)
+message TemplateBoundParty {
+  // the party whose actions are template-constrained
+  string party = 1;
+
+  // reserved: was hosting_participant_uids. Hosting is managed by PartyToParticipant.
+  reserved 2;
+
+  // fully qualified Daml template IDs that this party is allowed to act on.
+  repeated string allowed_template_ids = 3;
+
+  // hash of the operational signing key (hot key).
+  bytes signing_key_hash = 4;
+
+  // if true, the signing key may be destroyed (trustless mode).
+  // if false, key destruction is permanently forbidden (regulated mode).
+  // immutable after creation.
+  bool key_destruction_allowed = 5;
+
+  // hash of the root key (cold storage). authorizes operational key rotation.
+  // if empty, no key rotation is possible.
+  bytes root_key_hash = 6;
+}
+
 message TopologyMapping {
   oneof mapping {
     NamespaceDelegation namespace_delegation = 1;
@@ -423,6 +453,8 @@ message TopologyMapping {
 
     LsuAnnouncement synchronizer_upgrade_announcement = 17;
     LsuSequencerConnectionSuccessor sequencer_connection_successor = 18;
+
+    TemplateBoundParty template_bound_party = 19;
   }
   reserved 2; // was identifier_delegation
   reserved 10; // was authority_of
