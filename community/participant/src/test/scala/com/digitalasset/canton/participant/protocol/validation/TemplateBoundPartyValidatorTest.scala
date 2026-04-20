@@ -3,7 +3,7 @@
 
 package com.digitalasset.canton.participant.protocol.validation
 
-import com.digitalasset.canton.topology.{ParticipantId, PartyId}
+import com.digitalasset.canton.topology.PartyId
 import com.digitalasset.canton.topology.transaction.TemplateBoundPartyMapping
 import com.google.protobuf.ByteString
 import org.scalatest.matchers.should.Matchers
@@ -12,11 +12,9 @@ import org.scalatest.wordspec.AnyWordSpec
 class TemplateBoundPartyValidatorTest extends AnyWordSpec with Matchers {
 
   private val partyId = PartyId.tryFromProtoPrimitive("pool::1220abcdef")
-  private val participantId = ParticipantId.tryFromProtoPrimitive("PAR::participant1::1220abcdef")
 
   private val config = TemplateBoundPartyMapping(
     partyId = partyId,
-    hostingParticipantIds = Seq(participantId),
     allowedTemplateIds = Set(
       "com.example:AMMPool:1.0",
       "com.example:Token:1.0",

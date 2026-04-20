@@ -3,7 +3,7 @@
 
 package com.digitalasset.canton.topology.transaction.checks
 
-import com.digitalasset.canton.topology.{ParticipantId, PartyId}
+import com.digitalasset.canton.topology.PartyId
 import com.digitalasset.canton.topology.transaction.TemplateBoundPartyMapping
 import com.google.protobuf.ByteString
 import org.scalatest.matchers.should.Matchers
@@ -12,7 +12,6 @@ import org.scalatest.wordspec.AnyWordSpec
 class TemplateBoundPartyChecksTest extends AnyWordSpec with Matchers {
 
   private val partyId = PartyId.tryFromProtoPrimitive("pool::1220abcdef")
-  private val participantId = ParticipantId.tryFromProtoPrimitive("PAR::participant1::1220abcdef")
   private val operationalKey = ByteString.copyFrom(Array.fill(32)(0x42.toByte))
   private val newOperationalKey = ByteString.copyFrom(Array.fill(32)(0x99.toByte))
   private val rootKey = ByteString.copyFrom(Array.fill(32)(0xAA.toByte))
@@ -20,7 +19,6 @@ class TemplateBoundPartyChecksTest extends AnyWordSpec with Matchers {
   // Trustless mode: no root key, key destruction allowed
   private val trustlessMapping = TemplateBoundPartyMapping(
     partyId = partyId,
-    hostingParticipantIds = Seq(participantId),
     allowedTemplateIds = Set("com.example:AMMPool:1.0"),
     signingKeyHash = operationalKey,
     keyDestructionAllowed = true,
@@ -30,7 +28,6 @@ class TemplateBoundPartyChecksTest extends AnyWordSpec with Matchers {
   // Regulated mode with root key: key rotation supported
   private val regulatedMapping = TemplateBoundPartyMapping(
     partyId = partyId,
-    hostingParticipantIds = Seq(participantId),
     allowedTemplateIds = Set("com.example:AMMPool:1.0"),
     signingKeyHash = operationalKey,
     keyDestructionAllowed = false,
@@ -40,7 +37,6 @@ class TemplateBoundPartyChecksTest extends AnyWordSpec with Matchers {
   // Regulated mode without root key: no rotation
   private val simpleRegulatedMapping = TemplateBoundPartyMapping(
     partyId = partyId,
-    hostingParticipantIds = Seq(participantId),
     allowedTemplateIds = Set("com.example:AMMPool:1.0"),
     signingKeyHash = operationalKey,
     keyDestructionAllowed = false,
@@ -72,7 +68,6 @@ class TemplateBoundPartyChecksTest extends AnyWordSpec with Matchers {
       rotated.allowedTemplateIds shouldBe regulatedMapping.allowedTemplateIds
       rotated.keyDestructionAllowed shouldBe regulatedMapping.keyDestructionAllowed
       rotated.rootKeyHash shouldBe regulatedMapping.rootKeyHash
-      rotated.hostingParticipantIds shouldBe regulatedMapping.hostingParticipantIds
     }
 
     "reject key rotation when no root key exists (trustless)" in {
@@ -106,15 +101,6 @@ class TemplateBoundPartyChecksTest extends AnyWordSpec with Matchers {
         rootKeyHash = ByteString.copyFrom(Array.fill(32)(0xBB.toByte)),
       )
       tampered.rootKeyHash should not be regulatedMapping.rootKeyHash
-    }
-
-    "reject changing hosting participants during key rotation" in {
-      val participant2 = ParticipantId.tryFromProtoPrimitive("PAR::participant2::1220abcdef")
-      val tampered = regulatedMapping.copy(
-        signingKeyHash = newOperationalKey,
-        hostingParticipantIds = Seq(participantId, participant2),
-      )
-      tampered.hostingParticipantIds should not be regulatedMapping.hostingParticipantIds
     }
 
     "reject update that changes nothing (same signing key)" in {

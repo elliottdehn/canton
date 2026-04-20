@@ -1111,11 +1111,6 @@ class GrpcPartyManagementService(
         .withDescription("allowed_template_ids must not be empty")
         .asRuntimeException()
 
-    if (request.hostingParticipantUids.isEmpty)
-      throw Status.INVALID_ARGUMENT
-        .withDescription("hosting_participant_uids must not be empty")
-        .asRuntimeException()
-
     val signingKeyFingerprint = Fingerprint
       .fromProtoPrimitive(request.signingKeyFingerprint)
       .valueOr(e =>
@@ -1124,22 +1119,9 @@ class GrpcPartyManagementService(
           .asRuntimeException()
       )
 
-    val hostingParticipantIds = request.hostingParticipantUids.map(uid =>
-      ParticipantId(
-        UniqueIdentifier
-          .fromProtoPrimitive(uid, "hosting_participant_uids")
-          .valueOr(e =>
-            throw Status.INVALID_ARGUMENT
-              .withDescription(s"Invalid participant UID: ${e.message}")
-              .asRuntimeException()
-          )
-      )
-    )
-
     registration
       .finalize(
         partyId = partyId,
-        hostingParticipantIds = hostingParticipantIds,
         allowedTemplateIds = request.allowedTemplateIds.toSet,
         signingKeyFingerprint = signingKeyFingerprint,
       )
@@ -1148,7 +1130,7 @@ class GrpcPartyManagementService(
         v30.FinalizeTemplateBoundPartyResponse(
           partyId = mapping.partyId.toProtoPrimitive,
           keyDestroyed = true,
-          hostingParticipantCount = mapping.hostingParticipantIds.size,
+          hostingParticipantCount = 0,
         )
       )
       .onShutdown(throw Status.ABORTED.withDescription("Shutting down").asRuntimeException())

@@ -4,7 +4,7 @@
 package com.digitalasset.canton.topology.transaction
 
 import com.digitalasset.canton.protocol.v30
-import com.digitalasset.canton.topology.{ParticipantId, PartyId}
+import com.digitalasset.canton.topology.PartyId
 import com.google.protobuf.ByteString
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -12,12 +12,10 @@ import org.scalatest.wordspec.AnyWordSpec
 class TemplateBoundPartyMappingTest extends AnyWordSpec with Matchers {
 
   private val partyId = PartyId.tryFromProtoPrimitive("pool::1220abcdef")
-  private val participantId = ParticipantId.tryFromProtoPrimitive("PAR::participant1::1220abcdef")
   private val keyHash = ByteString.copyFrom(Array.fill(32)(0x42.toByte))
 
   private val mapping = TemplateBoundPartyMapping(
     partyId = partyId,
-    hostingParticipantIds = Seq(participantId),
     allowedTemplateIds = Set("com.example:AMMPool:1.0", "com.example:Token:1.0"),
     signingKeyHash = keyHash,
   )
@@ -33,11 +31,6 @@ class TemplateBoundPartyMappingTest extends AnyWordSpec with Matchers {
     "serialize party ID correctly" in {
       val proto = mapping.toProto
       proto.party shouldBe partyId.toProtoPrimitive
-    }
-
-    "serialize participant IDs correctly" in {
-      val proto = mapping.toProto
-      proto.hostingParticipantUids shouldBe Seq(participantId.uid.toProtoPrimitive)
     }
 
     "serialize allowed template IDs" in {
@@ -116,7 +109,6 @@ class TemplateBoundPartyMappingTest extends AnyWordSpec with Matchers {
     "handle empty allowed template list" in {
       val proto = v30.TemplateBoundParty(
         party = partyId.toProtoPrimitive,
-        hostingParticipantUids = Seq(participantId.uid.toProtoPrimitive),
         allowedTemplateIds = Seq.empty,
         signingKeyHash = keyHash,
         keyDestructionAllowed = true,
@@ -130,7 +122,6 @@ class TemplateBoundPartyMappingTest extends AnyWordSpec with Matchers {
     "preserve duplicate template IDs as a set" in {
       val proto = v30.TemplateBoundParty(
         party = partyId.toProtoPrimitive,
-        hostingParticipantUids = Seq(participantId.uid.toProtoPrimitive),
         allowedTemplateIds = Seq("com.example:Token:1.0", "com.example:Token:1.0"),
         signingKeyHash = keyHash,
         keyDestructionAllowed = true,

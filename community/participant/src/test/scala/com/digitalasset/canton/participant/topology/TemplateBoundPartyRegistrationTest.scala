@@ -114,14 +114,12 @@ class TemplateBoundPartyRegistrationTest
         result <- registration
           .finalize(
             partyId = partyId,
-            hostingParticipantIds = Seq(localParticipant),
             allowedTemplateIds = Set("com.example:AMMPool:1.0", "com.example:Token:1.0"),
             signingKeyFingerprint = signingKey.fingerprint,
           )
           .valueOrFail("finalize")
       } yield {
         result.partyId shouldBe partyId
-        result.hostingParticipantIds shouldBe Seq(localParticipant)
         result.allowedTemplateIds shouldBe Set("com.example:AMMPool:1.0", "com.example:Token:1.0")
       }
     }
@@ -190,7 +188,6 @@ class TemplateBoundPartyRegistrationTest
         _ <- registration
           .finalize(
             partyId = partyId,
-            hostingParticipantIds = Seq(localParticipant),
             allowedTemplateIds = Set("com.example:Pool:1.0"),
             signingKeyFingerprint = signingKey.fingerprint,
           )
@@ -240,7 +237,6 @@ class TemplateBoundPartyRegistrationTest
         _ <- registration
           .finalize(
             partyId = partyId,
-            hostingParticipantIds = Seq(localParticipant),
             allowedTemplateIds = Set("com.example:Pool:1.0"),
             signingKeyFingerprint = signingKey.fingerprint,
           )
@@ -252,7 +248,6 @@ class TemplateBoundPartyRegistrationTest
           case Some(mapping) =>
             mapping.partyId shouldBe partyId
             mapping.allowedTemplateIds shouldBe Set("com.example:Pool:1.0")
-            mapping.hostingParticipantIds shouldBe Seq(localParticipant)
           case None =>
             fail("Expected Some(TemplateBoundPartyMapping) but got None")
         }
@@ -293,7 +288,6 @@ class TemplateBoundPartyRegistrationTest
         result <- registration
           .finalize(
             partyId = partyId,
-            hostingParticipantIds = Seq(localParticipant),
             allowedTemplateIds = Set("com.example:Pool:1.0"),
             signingKeyFingerprint = signingKey.fingerprint,
             destroyKey = false,
@@ -364,7 +358,6 @@ class TemplateBoundPartyRegistrationTest
         _ <- registration
           .finalize(
             partyId = partyId,
-            hostingParticipantIds = Seq(localParticipant),
             allowedTemplateIds = Set("com.example:Pool:1.0"),
             signingKeyFingerprint = signingKey.fingerprint,
             destroyKey = false,
@@ -376,7 +369,6 @@ class TemplateBoundPartyRegistrationTest
         destroyResult <- registration
           .finalize(
             partyId = partyId,
-            hostingParticipantIds = Seq(localParticipant),
             allowedTemplateIds = Set("com.example:Pool:1.0"),
             signingKeyFingerprint = signingKey.fingerprint,
             destroyKey = true,
@@ -476,7 +468,6 @@ class TemplateBoundPartyRegistrationTest
         // Create TBP with root key (regulated mode with rotation support)
         originalMapping = TemplateBoundPartyMapping(
           partyId = partyId,
-          hostingParticipantIds = Seq(localParticipant),
           allowedTemplateIds = Set("com.example:Pool:1.0"),
           signingKeyHash = operationalKeyHash,
           keyDestructionAllowed = false,
@@ -554,7 +545,6 @@ class TemplateBoundPartyRegistrationTest
 
         originalMapping = TemplateBoundPartyMapping(
           partyId = partyId,
-          hostingParticipantIds = Seq(localParticipant),
           allowedTemplateIds = Set("com.example:Pool:1.0"),
           signingKeyHash = rootKeyHash,
           keyDestructionAllowed = false,

@@ -410,29 +410,22 @@ message TemplateBoundParty {
   // the party whose actions are template-constrained
   string party = 1;
 
-  // participants hosting this party (each performs auto-confirmation independently).
-  // multiple participants provide liveness redundancy — if one goes down, others
-  // can still serve transactions. any single hosting participant can auto-confirm.
-  repeated string hosting_participant_uids = 2;
+  // reserved: was hosting_participant_uids. Hosting is managed by PartyToParticipant.
+  reserved 2;
 
   // fully qualified Daml template IDs that this party is allowed to act on.
-  // any transaction where this party is signatory/controller on a choice
-  // outside this set will be rejected.
   repeated string allowed_template_ids = 3;
 
-  // hash of the operational signing key. this is the "hot" key used for
-  // daily transaction signing. can be rotated by the root key.
+  // hash of the operational signing key (hot key).
   bytes signing_key_hash = 4;
 
-  // if true, the signing key may be destroyed after registration (trustless mode).
+  // if true, the signing key may be destroyed (trustless mode).
   // if false, key destruction is permanently forbidden (regulated mode).
-  // immutable after creation — cannot be changed from false to true.
+  // immutable after creation.
   bool key_destruction_allowed = 5;
 
-  // hash of the root key (cold storage). only used in regulated mode.
-  // the root key can authorize operational key rotations (updating signing_key_hash).
-  // the root key itself cannot be rotated or destroyed.
-  // if empty, no key rotation is possible (trustless mode or simple regulated mode).
+  // hash of the root key (cold storage). authorizes operational key rotation.
+  // if empty, no key rotation is possible.
   bytes root_key_hash = 6;
 }
 

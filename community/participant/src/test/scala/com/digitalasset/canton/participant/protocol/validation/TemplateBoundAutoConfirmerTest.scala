@@ -7,7 +7,7 @@ import com.digitalasset.canton.BaseTest
 import com.digitalasset.canton.lifecycle.FutureUnlessShutdown
 import com.digitalasset.canton.topology.client.TopologySnapshot
 import com.digitalasset.canton.topology.transaction.TemplateBoundPartyMapping
-import com.digitalasset.canton.topology.{ParticipantId, PartyId}
+import com.digitalasset.canton.topology.PartyId
 import com.google.protobuf.ByteString
 import org.mockito.MockitoSugar
 import org.scalatest.wordspec.AsyncWordSpec
@@ -24,12 +24,10 @@ class TemplateBoundAutoConfirmerTest
   private val partyA = PartyId.tryFromProtoPrimitive("partyA::1220abcdef")
   private val partyB = PartyId.tryFromProtoPrimitive("partyB::1220abcdef")
   private val partyC = PartyId.tryFromProtoPrimitive("partyC::1220abcdef")
-  private val participantId = ParticipantId.tryFromProtoPrimitive("PAR::participant1::1220abcdef")
   private val keyHash = ByteString.copyFrom(Array.fill(32)(0x42.toByte))
 
   private val tbpConfig = TemplateBoundPartyMapping(
     partyId = partyA,
-    hostingParticipantIds = Seq(participantId),
     allowedTemplateIds = Set("com.example:AMMPool:1.0"),
     signingKeyHash = keyHash,
   )

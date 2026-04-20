@@ -51,7 +51,6 @@ sealed trait AmmIntegrationTest extends CommunityIntegrationTest with SharedEnvi
       // The key is not destroyed in this test (we're testing auto-confirmation, not key lifecycle).
       val tbpMapping = TemplateBoundPartyMapping(
         partyId = pool,
-        hostingParticipantIds = Seq(participant1.id),
         allowedTemplateIds = Set(
           s"$ammPkg:Amm:Pool",
           s"$ammPkg:Amm:LPToken",
@@ -191,7 +190,6 @@ sealed trait AmmIntegrationTest extends CommunityIntegrationTest with SharedEnvi
         participant1.topology.transactions.propose(
           TemplateBoundPartyMapping(
             partyId = poolR,
-            hostingParticipantIds = Seq(participant1.id),
             allowedTemplateIds = Set(
               s"$ammPkg:Amm:Pool",
               s"$ammPkg:Amm:LPToken",
@@ -362,7 +360,6 @@ sealed trait AmmIntegrationTest extends CommunityIntegrationTest with SharedEnvi
       participant1.topology.transactions.propose(
         TemplateBoundPartyMapping(
           partyId = tbpPool,
-          hostingParticipantIds = Seq(participant1.id),
           allowedTemplateIds = Set(s"$ammPkg:Amm:Pool"),
           signingKeyHash = ByteString.copyFrom(Array.fill(32)(0x00.toByte)),
         ),
@@ -418,7 +415,6 @@ sealed trait AmmIntegrationTest extends CommunityIntegrationTest with SharedEnvi
       participant1.topology.transactions.propose(
         TemplateBoundPartyMapping(
           partyId = pool2,
-          hostingParticipantIds = Seq(participant1.id),
           allowedTemplateIds = Set(s"$ammPkg:Amm:Pool", s"$ammPkg:Amm:LPToken", s"$ammPkg:Amm:RedeemRequest"),
           signingKeyHash = ByteString.copyFrom(Array.fill(32)(0x00.toByte)),
         ),
@@ -522,7 +518,6 @@ sealed trait AmmIntegrationTest extends CommunityIntegrationTest with SharedEnvi
       participant1.topology.transactions.propose(
         TemplateBoundPartyMapping(
           partyId = poolJpyCc,
-          hostingParticipantIds = Seq(participant1.id),
           allowedTemplateIds = allowedTemplates,
           signingKeyHash = ByteString.copyFrom(Array.fill(32)(0x00.toByte)),
         ),
@@ -531,7 +526,6 @@ sealed trait AmmIntegrationTest extends CommunityIntegrationTest with SharedEnvi
       participant1.topology.transactions.propose(
         TemplateBoundPartyMapping(
           partyId = poolCcBrl,
-          hostingParticipantIds = Seq(participant1.id),
           allowedTemplateIds = allowedTemplates,
           signingKeyHash = ByteString.copyFrom(Array.fill(32)(0x00.toByte)),
         ),
@@ -717,7 +711,6 @@ sealed trait AmmIntegrationTest extends CommunityIntegrationTest with SharedEnvi
         participant1.topology.transactions.propose(
           TemplateBoundPartyMapping(
             partyId = regPool,
-            hostingParticipantIds = Seq(participant1.id),
             allowedTemplateIds = Set(
               s"$ammPkg:Amm:Pool",
               s"$ammPkg:Amm:LPToken",

@@ -111,19 +111,18 @@ class TemplateBoundPartyRegistration(
     */
   /** Phase 2: Finalize the TBP registration.
     *
-    * @param destroyKey if true, the signing key is destroyed after registration (trustless mode).
-    *                   if false, the key is retained (regulated mode) and key_destruction_allowed
-    *                   is set to false in the mapping, permanently preventing future destruction.
+    * Submits the TemplateBoundPartyMapping and optionally destroys the signing key.
+    * Hosting is managed separately via PartyToParticipant topology transactions.
+    *
+    * @param destroyKey if true, the signing key is destroyed (trustless mode).
+    *                   if false, the key is retained (regulated mode).
     */
   def finalize(
       partyId: PartyId,
-      hostingParticipantIds: Seq[ParticipantId],
       allowedTemplateIds: Set[String],
       signingKeyFingerprint: Fingerprint,
       destroyKey: Boolean = true,
   )(implicit traceContext: TraceContext): EitherT[FutureUnlessShutdown, String, TemplateBoundPartyMapping] = {
-
-    require(hostingParticipantIds.nonEmpty, "At least one hosting participant is required")
 
     val signingKeyHash = hashOps
       .digest(
@@ -134,7 +133,6 @@ class TemplateBoundPartyRegistration(
 
     val mapping = TemplateBoundPartyMapping(
       partyId = partyId,
-      hostingParticipantIds = hostingParticipantIds,
       allowedTemplateIds = allowedTemplateIds,
       signingKeyHash = signingKeyHash,
       keyDestructionAllowed = destroyKey,
@@ -151,10 +149,7 @@ class TemplateBoundPartyRegistration(
         s"Signing key $signingKeyFingerprint does not exist in the private store",
       )
 
-      // Step 2: Verify ALL participants are hosting this party
-      _ <- verifyAllParticipantsHosting(partyId, hostingParticipantIds)
-
-      // Step 3: Submit the TemplateBoundPartyMapping topology transaction
+      // Step 2: Submit the TemplateBoundPartyMapping topology transaction
       _ <- topologyManager
         .proposeAndAuthorize(
           op = TopologyChangeOp.Replace,
@@ -168,66 +163,26 @@ class TemplateBoundPartyRegistration(
         .leftMap(e => s"Failed to submit topology transaction: $e")
 
       _ = logger.info(
-        s"Template-bound party topology transaction accepted for $partyId " +
-          s"on ${hostingParticipantIds.size} participant(s). " +
-          s"destroyKey=$destroyKey"
+        s"Template-bound party mapping accepted for $partyId. destroyKey=$destroyKey"
       )
 
-      // Step 4: DESTROY THE KEY — point of no return (trustless mode only).
-      // In regulated mode (destroyKey=false), the key is retained. The mapping
-      // records keyDestructionAllowed=false, permanently preventing future destruction.
+      // Step 3: Optionally DESTROY THE KEY (trustless mode only).
       _ <- if (destroyKey) {
         privateStore
           .removePrivateKey(signingKeyFingerprint)
           .leftMap(e => s"Failed to destroy signing key: $e")
       } else {
         logger.info(
-          s"Regulated mode: retaining signing key $signingKeyFingerprint for $partyId. " +
-            s"Key destruction is permanently forbidden for this party."
+          s"Regulated mode: retaining signing key $signingKeyFingerprint for $partyId."
         )
         EitherT.rightT[FutureUnlessShutdown, String](())
       }
 
       _ = logger.info(
         s"Finalized template-bound party $partyId. " +
-          s"Hosting participants: ${hostingParticipantIds.mkString(", ")}. " +
           s"Allowed templates: ${allowedTemplateIds.mkString(", ")}."
       )
     } yield mapping
   }
 
-  private def verifyAllParticipantsHosting(
-      partyId: PartyId,
-      requiredParticipants: Seq[ParticipantId],
-  )(implicit traceContext: TraceContext): EitherT[FutureUnlessShutdown, String, Unit] = {
-    import com.daml.nonempty.NonEmpty
-    val ptpKey = PartyToParticipant.uniqueKey(partyId)
-    for {
-      existingTxs <- EitherT.right[String](
-        topologyManager.store
-          .findTransactionsForMapping(
-            com.digitalasset.canton.topology.processing.EffectiveTime.MaxValue,
-            NonEmpty(Set, ptpKey),
-          )
-      )
-
-      latestPtp = existingTxs
-        .flatMap(_.select[TopologyChangeOp.Replace, PartyToParticipant].map(_.mapping))
-        .maxByOption(_.participants.size)
-
-      hostedParticipantIds = latestPtp.toList.flatMap(_.participants.map(_.participantId)).toSet
-
-      missingParticipants = requiredParticipants.filterNot(hostedParticipantIds.contains)
-
-      _ <- EitherT.cond[FutureUnlessShutdown](
-        missingParticipants.isEmpty,
-        (),
-        s"The following participants are not yet hosting party $partyId: " +
-          s"${missingParticipants.mkString(", ")}. " +
-          s"Each participant must have a live PartyToParticipant mapping before " +
-          s"the key can be destroyed. Call AllocateTemplateBoundParty on each " +
-          s"participant first, or use the standard topology proposal/accept flow.",
-      )
-    } yield ()
-  }
 }

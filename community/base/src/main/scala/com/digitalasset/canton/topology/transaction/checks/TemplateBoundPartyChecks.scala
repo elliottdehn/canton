@@ -20,7 +20,7 @@ import scala.concurrent.ExecutionContext
   *   - allowedTemplateIds (the template whitelist)
   *   - keyDestructionAllowed (trustless vs regulated mode)
   *   - rootKeyHash (the cold storage key itself)
-  *   - hostingParticipantIds (add-only would be a separate feature)
+  *   (hosting is managed by PartyToParticipant, not TBP)
   *
   * Mutable field (only when rootKeyHash is set):
   *   - signingKeyHash (operational key rotation)
@@ -81,6 +81,5 @@ class TemplateBoundPartyChecks(implicit ec: ExecutionContext) extends TopologyMa
       existing.allowedTemplateIds == updated.allowedTemplateIds &&
       existing.keyDestructionAllowed == updated.keyDestructionAllowed &&
       existing.rootKeyHash == updated.rootKeyHash &&
-      existing.hostingParticipantIds == updated.hostingParticipantIds &&
       existing.signingKeyHash != updated.signingKeyHash
 }

@@ -40,10 +40,6 @@ class TemplateBoundPartyInformeeTest extends AnyWordSpec with Matchers {
       val mapping = TemplateBoundPartyMapping(
         partyId = com.digitalasset.canton.topology.PartyId
           .tryFromProtoPrimitive("pool::1220abcdef"),
-        hostingParticipantIds = Seq(
-          com.digitalasset.canton.topology.ParticipantId
-            .tryFromProtoPrimitive("PAR::participant1::1220abcdef")
-        ),
         allowedTemplateIds = Set("com.example:AMMPool:1.0"),
         signingKeyHash = com.google.protobuf.ByteString.copyFrom(Array.fill(32)(0x42.toByte)),
       )
@@ -55,12 +51,8 @@ class TemplateBoundPartyInformeeTest extends AnyWordSpec with Matchers {
       mapping.namespace shouldBe mapping.partyId.namespace
       mapping.maybeUid shouldBe Some(mapping.partyId.uid)
 
-      // The hosting participants are referenced — they need the views
-      mapping.hostingParticipantIds should not be empty
+      // The party UID is referenced — hosting participants need the views
       mapping.referencedUids should contain(mapping.partyId.uid)
-      mapping.hostingParticipantIds.foreach { pid =>
-        mapping.referencedUids should contain(pid.uid)
-      }
     }
 
     "dark pool privacy comes from observer list, not informee exclusion" in {

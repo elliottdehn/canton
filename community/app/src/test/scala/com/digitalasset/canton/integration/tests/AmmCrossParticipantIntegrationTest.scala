@@ -156,7 +156,6 @@ sealed trait AmmCrossParticipantIntegrationTest
         participant1.topology.transactions.propose(
           TemplateBoundPartyMapping(
             partyId = tbpPool,
-            hostingParticipantIds = Seq(participant1.id),
             allowedTemplateIds = Set(
               s"$ammPkg:Amm:Pool",
               s"$ammPkg:Amm:LPToken",
@@ -286,7 +285,6 @@ sealed trait AmmCrossParticipantIntegrationTest
       participant1.topology.transactions.propose(
         TemplateBoundPartyMapping(
           partyId = poolJpyCc,
-          hostingParticipantIds = Seq(participant1.id),
           allowedTemplateIds = allowedTemplates,
           signingKeyHash = ByteString.copyFrom(Array.fill(32)(0x00.toByte)),
         ),
@@ -297,7 +295,6 @@ sealed trait AmmCrossParticipantIntegrationTest
       participant2.topology.transactions.propose(
         TemplateBoundPartyMapping(
           partyId = poolCcBrl,
-          hostingParticipantIds = Seq(participant2.id),
           allowedTemplateIds = allowedTemplates,
           signingKeyHash = ByteString.copyFrom(Array.fill(32)(0x00.toByte)),
         ),
